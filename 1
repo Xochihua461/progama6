@@ -1,63 +1,73 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Receptor de JSON Bluetooth</title>
+    <title>Grabación de audio</title>
 </head>
 <body>
-    <h1>Receptor de JSON Bluetooth</h1>
-    <div id="ipDisplay"></div>
+    <button id="recordButton">Grabar</button>
+    <button id="stopButton" disabled>Detener</button>
+    <button id="sendButton" disabled>Enviar a ESP32</button>
+    
+    <audio id="audioPlayback" controls></audio>
 
     <script>
-        async function connectToBluetooth() {
-            try {
-                // Solicitar permiso para acceder al dispositivo Bluetooth
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true, // Cambia esto por el filtro adecuado si conoces la identidad del dispositivo
-                    optionalServices: ['generic_access'] // Cambia esto por los servicios Bluetooth que ofrece tu ESP32
-                });
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob;
 
-                // Conectar al dispositivo Bluetooth
-                const server = await device.gatt.connect();
+        document.getElementById('recordButton').addEventListener('click', startRecording);
+        document.getElementById('stopButton').addEventListener('click', stopRecording);
+        document.getElementById('sendButton').addEventListener('click', sendAudioToESP32);
 
-                // Obtener el servicio Bluetooth
-                const service = await server.getPrimaryService('generic_access'); // Cambia esto por el servicio adecuado
+        function startRecording() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.start();
 
-                // Obtener la característica Bluetooth
-                const characteristic = await service.getCharacteristic('generic_access'); // Cambia esto por la característica adecuada
+                    document.getElementById('recordButton').disabled = true;
+                    document.getElementById('stopButton').disabled = false;
 
-                // Escuchar por cambios en la característica Bluetooth
-                characteristic.addEventListener('characteristicvaluechanged', handleCharacteristicValueChanged);
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
 
-                // Iniciar la notificación de cambios en la característica Bluetooth
-                await characteristic.startNotifications();
+                    mediaRecorder.onstop = () => {
+                        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        const audio = document.getElementById('audioPlayback');
+                        audio.src = audioUrl;
 
-            } catch (error) {
-                console.error('Error de Bluetooth:', error);
-            }
+                        audioChunks = [];
+                        document.getElementById('sendButton').disabled = false;
+                    };
+                })
+                .catch(error => console.error('Error al acceder al micrófono', error));
         }
 
-        function handleCharacteristicValueChanged(event) {
-            const value = event.target.value;
-            const decoder = new TextDecoder('utf-8');
-            const json = decoder.decode(value);
-            // Mostrar el JSON recibido
-            console.log("JSON recibido:", json);
-            // Procesar el JSON (aquí podrías mostrarlo en la página)
-            processData(JSON.parse(json));
+        function stopRecording() {
+            mediaRecorder.stop();
+
+            document.getElementById('recordButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
         }
 
-        function processData(data) {
-            var ipDisplay = document.getElementById('ipDisplay');
-            // Mostrar el número IP en el elemento HTML
-            ipDisplay.innerHTML = "<p>Su número IP es: " + data.IP + "</p>";
-        }
+        function sendAudioToESP32() {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'audio.wav');
 
-        // Llamar a la función para conectar al dispositivo Bluetooth cuando se carga la página
-        window.onload = function() {
-            connectToBluetooth();
-        };
+            fetch('http://192.168.100.55/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(result => {
+                console.log('Éxito:', result);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
     </script>
 </body>
 </html>
