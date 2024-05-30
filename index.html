@@ -1,73 +1,33 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>Grabación de audio</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grabador de Audio</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #controls {
+            margin: 20px;
+        }
+    </style>
 </head>
 <body>
-    <button id="recordButton">Grabar</button>
-    <button id="stopButton" disabled>Detener</button>
-    <button id="sendButton" disabled>Enviar a ESP32</button>
-    
-    <audio id="audioPlayback" controls></audio>
-
-    <script>
-        let mediaRecorder;
-        let audioChunks = [];
-        let audioBlob;
-
-        document.getElementById('recordButton').addEventListener('click', startRecording);
-        document.getElementById('stopButton').addEventListener('click', stopRecording);
-        document.getElementById('sendButton').addEventListener('click', sendAudioToESP32);
-
-        function startRecording() {
-            navigator.mediaDevices.getUserMedia({ audio: true })
-                .then(stream => {
-                    mediaRecorder = new MediaRecorder(stream);
-                    mediaRecorder.start();
-
-                    document.getElementById('recordButton').disabled = true;
-                    document.getElementById('stopButton').disabled = false;
-
-                    mediaRecorder.ondataavailable = event => {
-                        audioChunks.push(event.data);
-                    };
-
-                    mediaRecorder.onstop = () => {
-                        audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                        const audioUrl = URL.createObjectURL(audioBlob);
-                        const audio = document.getElementById('audioPlayback');
-                        audio.src = audioUrl;
-
-                        audioChunks = [];
-                        document.getElementById('sendButton').disabled = false;
-                    };
-                })
-                .catch(error => console.error('Error al acceder al micrófono', error));
-        }
-
-        function stopRecording() {
-            mediaRecorder.stop();
-
-            document.getElementById('recordButton').disabled = false;
-            document.getElementById('stopButton').disabled = true;
-        }
-
-        function sendAudioToESP32() {
-            const formData = new FormData();
-            formData.append('audio', audioBlob, 'audio.wav');
-
-            fetch('http://192.168.100.55/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.text())
-            .then(result => {
-                console.log('Éxito:', result);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-        }
-    </script>
+    <h1>Grabador de Audio</h1>
+    <div id="controls">
+        <button id="recordButton">Grabar</button>
+        <button id="stopButton" disabled>Detener</button>
+        <button id="sendButton" disabled>Enviar a ESP32</button>
+        <audio id="audioPlayback" controls></audio>
+    </div>
+    <script src="script.js"></script>
 </body>
 </html>
